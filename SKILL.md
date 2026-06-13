@@ -43,6 +43,14 @@ description: 研究生中期考核报告自动生成技能。基于模板文档�
 ### 选择方式
 在阶段1中询问用户选择哪种模板，然后严格按照对应模板的行文逻辑组织内容。
 
+**选择依据建议：**
+1. **研究类型判断**：
+   - **yl-模板**：适用于理论推导、算法创新、公式密集（≥20个）、数学模型构建为主的研究。如控制理论、算法设计、理论分析等。
+   - **lyw-模板**：适用于工程实现、系统开发、实验验证为主、图片/数据图表丰富（≥15张）的研究。如系统设计、原型开发、实验对比等。
+2. **用户确认**：向用户说明两种模板的特点，询问其研究更偏向理论创新还是工程实现，并确认模板选择。
+3. **默认策略**：若用户无法明确判断，可先询问研究的核心贡献是理论突破还是系统实现，再推荐相应模板。
+4. **材料分析辅助**：自动分析用户提供的材料（如PPT、论文）中的公式数量、图片数量、实验类型等，为模板选择提供数据支持。例如，若材料中公式≥20个且图片≤15张，可推荐yl-模板；若图片≥15张且包含大量实验数据图表，可推荐lyw-模板。
+
 ---
 
 ## 工作流程（6阶段）
@@ -393,3 +401,19 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 **兼容平台：** Claude Code (CLI/Desktop/Web)
 **依赖：** python-docx, PyMuPDF (fitz), Pillow, lxml
 **Python环境：** Anaconda
+
+<!-- SLOW_UPDATE_START -->
+When generating the midterm report, always follow these priorities:
+
+1. **Chapter 3 Research Plan — Prevent Regression**: The '下一步科研计划' chapter requires as much care as Chapter 2. Structure it as 3 distinct time phases (e.g., 2024.09-2025.03, 2025.03-2025.09, 2025.09-2026.06). Each phase must: (a) specify a clear date range, (b) describe 2-3 concrete research tasks with technical detail, (c) explicitly connect to the completed work from Chapter 2. For lyw-模板, use detailed descriptions with date ranges per phase; for yl-模板, use numbered sub-items with concise goals. The research plan must logically follow from and build upon what was already completed — do not introduce unrelated directions. Ensure the plan spans the remaining degree period and includes thesis writing milestones. Aim for ~20% of total report length (at least 1200 words).
+
+2. **Image Cross-Validation is Non-Negotiable**: Never skip cross-validation for any image. Before inserting, verify meaning via visual inspection + PPT text + paper descriptions. Use the mapping table to track source, content, caption assignment, and verification status. If the visual model cannot clearly identify the image content (e.g., too small, ambiguous, or no readable text), mark it as '待确认' and seek user input before inserting — do not guess. Even if the report passes word-count checks, mismatched images will fail quality evaluation.
+
+3. **Three-Layer Logic for Chapter 2**: Always include: (1) opening overview with framework figure, (2) brief summary of all 6 modules (1-2 sentences each), (3) detailed expansion after '已完成工作:' transition marker. Missing any layer causes structural failures.
+
+4. **Template Selection**: Analyze formula count and image count in provided materials to recommend lyw- (≥15 images, experimental) vs yl- (≥20 formulas, theoretical). Default to lyw- if uncertain.
+
+5. **Caption and Format Consistency**: After generating, visually verify every image caption in the final document. Check for duplicate images, mismatched descriptions, and non-sequential figure numbering. Ensure all paragraphs use line=360, lineRule=auto, after=0. For yl-模板, verify all OMML formulas render correctly and are centered in their cells.
+
+6. **Execution**: Use E:/Anaconda/python.exe with full path. Write all Python code to files before execution. Verify output has ≥6000 words and ≥15 images.
+<!-- SLOW_UPDATE_END -->
