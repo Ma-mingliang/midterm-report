@@ -1,19 +1,17 @@
 """
-中期考核报告生成脚本模板 v3.1
-根据实际工作目录和材料进行修改
+中期考核报告生成脚本模板 v4.0（通用版）
+适用于任意研究方向，通过动态模块结构生成报告
 
 使用方法：
 1. 修改 BASE_DIR 为实际工作目录
-2. 图片来源：优先从PPT/论文提取，也可使用图片/目录
-3. 追溯每张图片来源（PPT/论文），确认内容与图注对应
-4. 修改各章节内容（write_section1/2/3函数）
-5. 运行: E:/Anaconda/python.exe rewrite_report.py
+2. 修改 modules 列表，定义各研究模块
+3. 修改 write_section1/2/3 函数中的实际内容
+4. 运行: E:/Anaconda/python.exe rewrite_report.py
 
 注意：
 - 不要使用 conda run -n base python -c "多行代码"（Windows不支持）
 - 不要信任图片文件名，必须用视觉模型核验图片实际内容
 - 公式使用 pandoc LaTeX → OMML 转换，确保渲染正确（需要安装 pandoc）
-- 不再需要写入文件(3).docx、模板.docx、中期考核相关资料.docx
 
 环境要求：
 - Python >= 3.7
@@ -25,6 +23,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+from dataclasses import dataclass, field
 from typing import Optional
 
 from docx import Document
@@ -40,6 +39,49 @@ from lxml.etree import _Element
 BASE_DIR: str = r'工作目录路径'
 WRITE_FILE: str = os.path.join(BASE_DIR, '写入文件.docx')
 IMG_DIR: str = os.path.join(BASE_DIR, '图片')  # 用户提供的图片（可选）
+
+
+# ============================================================
+# 模块定义 - 动态结构
+# ============================================================
+@dataclass
+class Module:
+    """研究模块定义"""
+    title: str           # 模块标题
+    summary: str         # 1-2句话的概述（用于第二层）
+    description: str     # 详细描述（用于第三层）
+    images: list[str] = field(default_factory=list)  # 图片文件名列表
+    formulas: list[str] = field(default_factory=list)  # 公式标识列表
+
+
+# ============================================================
+# 动态模块列表 - 根据实际研究内容修改
+# ============================================================
+# 示例：以下是通用模板，请根据PPT/论文实际内容替换
+modules: list[Module] = [
+    Module(
+        title='数据采集与预处理',
+        summary='（1）[模块名称]，[做了什么]，[怎么做的]，[达到什么效果/为后续提供什么]。',
+        description='详细描述该模块的方法、实验和结果...',
+        images=['图2.png', '图3.png'],
+        formulas=[],
+    ),
+    Module(
+        title='核心方法设计',
+        summary='（2）[模块名称]，[做了什么]，[怎么做的]，[达到什么效果/为后续提供什么]。',
+        description='详细描述该模块的方法、实验和结果...',
+        images=['图4.png', '图5.png', '图6.png'],
+        formulas=['loss'],
+    ),
+    Module(
+        title='实验验证与分析',
+        summary='（3）[模块名称]，[做了什么]，[怎么做的]，[达到什么效果/为后续提供什么]。',
+        description='详细描述该模块的方法、实验和结果...',
+        images=['图7.png', '图8.png'],
+        formulas=[],
+    ),
+    # 根据实际需要添加更多模块...
+]
 
 
 # ============================================================
@@ -173,7 +215,7 @@ def img(name: str) -> Optional[str]:
     """图片路径查找（优先级：图片/ → ppt_images/ → paper_images/）
 
     Returns:
-        图片文件的完整路径，如果未找到则返回 None
+        图片文件的完整路径
 
     Raises:
         FileNotFoundError: 所有路径都找不到图片时抛出，附带详细诊断信息
@@ -201,115 +243,109 @@ def img(name: str) -> Optional[str]:
 
 
 # ============================================================
-# 章节写入函数 - 根据实际内容修改
+# 章节写入函数
 # ============================================================
-def write_section1(cell) -> None:
+def write_section1(cell, transcript_data: Optional[dict] = None) -> None:
     """一、思想品德与业务学习情况自述
 
-    内容要点（根据研究生成绩单填写）：
-    - 思想政治：政治态度、理论学习、制度遵守
-    - 课程成绩：总学分、绩点、核心课程及分数
-    - 学习态度：勤奋努力、积极向上
-    - 科研能力：参与项目、技能掌握
-    - 学术道德：规范遵守、课程支撑
-    - 身体素质：锻炼习惯、身心健康
+    Args:
+        cell: 表格单元格
+        transcript_data: 成绩单数据（可选），包含：
+            - total_credits: 总学分
+            - gpa: 绩点
+            - courses: 课程列表 [{'name': '课程名', 'score': 分数, 'category': '类别'}]
+            - has_remake: 是否有重修
     """
     clear_cell(cell)
 
-    add_para(cell, '思想政治方面内容...')
-    add_para(cell, '课程成绩方面内容（根据成绩单填写）...')
-    add_para(cell, '学习态度方面内容...')
-    add_para(cell, '科研能力方面内容...')
-    add_para(cell, '学术道德方面内容...')
-    add_para(cell, '身体素质方面内容...')
+    # 思想政治
+    add_para(cell, '本人自[入学年月]以来，严格遵守学校的各项规章制度，'
+             '在思想上积极向党组织靠拢，认真学习马克思主义基本理论，'
+             '拥护党的路线方针政策，坚持四项基本原则。')
+
+    # 学习态度+成绩总述
+    if transcript_data:
+        credits = transcript_data.get('total_credits', 'XX')
+        gpa = transcript_data.get('gpa', 'X.XX')
+        remake = '无任何重修课程' if not transcript_data.get('has_remake', False) else ''
+        add_para(cell, f'在学习上，本人勤奋努力，积极向上，学习成绩优良。'
+                 f'目前培养计划总学分{credits}分，现已圆满修满全部学分，'
+                 f'总平均绩点达{gpa}，{remake}。')
+    else:
+        add_para(cell, '在学习上，本人勤奋努力，积极向上，学习成绩优良。'
+                 '（请根据成绩单填写具体学分和绩点）')
+
+    # 核心课程（lyw-模板：逐门列出）
+    add_para(cell, '在核心课程方面，（请根据成绩单逐门列出课程名称、分数和收获）。')
+
+    # 科研能力
+    add_para(cell, '在科研上，本人认真钻研，积极探索，在导师的悉心指导下，'
+             '本人参与了多项科研项目，掌握了[相关技能]，具备了独立开展科研工作的能力。')
+
+    # 学术道德
+    add_para(cell, '在学术道德方面，本人严格遵守学术规范和道德准则，'
+             '在相关课程的指导下，树立了正确的学术价值观。')
+
+    # 身体素质
+    add_para(cell, '在身体素质方面，本人平时积极参加体育锻炼，保持良好的身心状态，'
+             '为科研工作提供了坚实的基础。')
 
 
 def write_section2(cell) -> None:
     """二、已完成的科研工作
 
-    三层行文逻辑（必须遵循）：
+    动态生成：根据 modules 列表自动展开各模块。
+    三层行文逻辑：
     1. 开篇总述：研究目的 + 整体框架 + 框架图
-    2. 六部分简要概述：每个模块1-2句话概括
+    2. N部分简要概述：每个模块1-2句话概括
     3. 详细展开："已完成工作：" + 每个模块详细描述
-
-    每个模块展开结构：
-    - 背景与目的（为什么要做）
-    - 方法描述（怎么做）
-    - 图片展示（配图说明）
-    - 实验验证（数据支撑）
-    - 创新点/结论
     """
     clear_cell(cell)
 
     # ============================================================
     # 第一层：开篇总述
     # ============================================================
-    add_para(cell, '本文的研究目的是...如图1所示为本文的整体研究框架...')
+    add_para(cell, '本文的研究目的是[从PPT首页/摘要提取研究目的]。'
+             f'如图1所示为本文的整体研究框架。')
     add_img(cell, img('图1.png'), width=Inches(5.5))
     add_caption(cell, '图1 整体研究框架')
 
     # ============================================================
-    # 第二层：六部分简要概述
+    # 第二层：N部分简要概述
     # ============================================================
-    add_para(cell, '目前已完成的工作主要包括以下六个方面：')
+    add_para(cell, f'目前已完成的工作主要包括以下{len(modules)}个方面：')
 
-    add_para(cell,
-        '（1）多模态数据采集与预处理，搭建多模态数据采集平台，采集sEMG和关节运动学数据，'
-        '并进行信号滤波、包络提取和标准化等预处理操作，为后续协同建模提供高质量数据基础。')
-
-    add_para(cell,
-        '（2）跨模态泛化协同建模，采用NMF提取肌肉协同特征，设计ResMamba混合骨干网络，'
-        '通过非对称跨模态知识蒸馏和迁移学习，构建从运动学到肌肉协同空间的鲁棒映射模型。')
-
-    add_para(cell,
-        '（3）实时协同缺损评估与前馈按需辅助解码，基于Assist-as-Needed机制，'
-        '实时评估患者协同缺损程度并生成前馈补偿信号，实现个性化辅助控制。')
-
-    add_para(cell,
-        '（4）基于MFAC的融合闭环控制律构建，将前馈补偿信号与MISO-MFAC反馈控制信号融合，'
-        '通过数据驱动线性化和自适应权重调整，实现抗疲劳的闭环轨迹跟踪控制。')
-
-    add_para(cell,
-        '（5）实验平台搭建，完成上位机中枢控制、多通道FES刺激器和角度传感器的系统集成，'
-        '搭建具备人体闭环验证条件的实验平台。')
-
-    add_para(cell,
-        '（6）学术成果积累，在跨模态协同解码和上肢康复控制领域取得多项研究成果。')
+    for i, module in enumerate(modules, 1):
+        # 使用模块的 summary，如果没有则生成默认格式
+        summary = module.summary if module.summary else f'（{i}）{module.title}。'
+        add_para(cell, summary)
 
     # ============================================================
     # 第三层：详细展开
     # ============================================================
     add_para(cell, '已完成工作：')
 
-    # 模块1：多模态数据采集与预处理
-    add_para(cell, '（1）多模态数据采集与预处理。详细描述...')
-    add_img(cell, img('图2.png'), width=Inches(4.5))
-    add_caption(cell, '图2 数据采集实验装置')
-    # ... 更多内容 ...
+    for i, module in enumerate(modules, 1):
+        # 模块标题
+        add_para(cell, f'（{i}）{module.title}。')
 
-    # 模块2：跨模态协同建模
-    add_para(cell, '（2）跨模态泛化协同建模。详细描述...')
-    # ... 包含公式 ...
-    # from omml_formulas import create_formula_paragraph
-    # create_formula_paragraph(cell, 'loss')
-    add_img(cell, img('图6.png'), width=Inches(5.0))
-    add_caption(cell, '图6 跨模态蒸馏架构与ResNet-Mamba骨干网络')
+        # 模块详细描述
+        add_para(cell, module.description)
 
-    # 模块3-5 同理...
+        # 插入模块图片
+        for img_name in module.images:
+            add_img(cell, img(img_name), width=Inches(5.0))
+            # 图注从文件名推断，实际应根据交叉验证结果填写
+            caption = img_name.replace('.png', '').replace('.jpg', '')
+            add_caption(cell, f'{caption}')
 
-    # 模块6：学术成果
-    add_para(cell, '（6）已取得的学术成果。如图16所示为目前已取得的各项学术成果。')
-    add_img(cell, img('图16.png'), width=Inches(5.0))
-    add_caption(cell, '图16 已取得学术成果')
-    add_para(cell, '论文1：...')
-    add_para(cell, '论文2：...')
-    add_para(cell, '软著：...')
-    add_para(cell, '专利：...')
-    add_para(cell, '比赛：...')
+        # 插入模块公式
+        # from omml_formulas import create_formula_paragraph
+        # for formula_id in module.formulas:
+        #     create_formula_paragraph(cell, formula_id)
 
-    add_para(cell,
-        '综上所述，本人已完成了从数据采集、跨模态建模到闭环控制的完整技术链路搭建，'
-        '形成了具有自主知识产权的上肢康复FES控制系统。')
+    # 总结
+    add_para(cell, '综上所述，本人已完成[总结已完成的工作内容]。')
 
 
 def write_section3(cell) -> None:
@@ -324,9 +360,9 @@ def write_section3(cell) -> None:
     clear_cell(cell)
 
     add_para(cell, '根据目前的研究进展和课题计划，下一步的科研工作主要包括以下三个阶段：')
-    add_para(cell, '2026.07-2026.08：第一阶段内容...', first_indent='440')
-    add_para(cell, '2026.09-2026.11：第二阶段内容...', first_indent='440')
-    add_para(cell, '2026.12-2027.04：第三阶段内容...', first_indent='440')
+    add_para(cell, '20XX.XX-20XX.XX：[第一阶段内容，与已完成工作衔接]...', first_indent='440')
+    add_para(cell, '20XX.XX-20XX.XX：[第二阶段内容，深化研究]...', first_indent='440')
+    add_para(cell, '20XX.XX-20XX.XX：[第三阶段内容，论文撰写与答辩准备]...', first_indent='440')
 
 
 # ============================================================

@@ -1,11 +1,11 @@
 ---
 name: midterm-report
-description: 研究生中期考核报告自动生成技能。基于论文PDF、中期PPT和成绩单，自动生成符合学校格式要求的中期考核报告Word文档。支持中英混合字体、OMML公式、图片来源追溯与交叉验证、三层行文逻辑结构，输出≥6000字、15-20张研究图片的完整报告。
+description: 研究生中期考核报告自动生成技能。基于论文PDF、中期PPT和成绩单，自动分析研究内容，动态生成符合学校格式要求的中期考核报告Word文档。支持任意研究方向，自适应模块检测、三层行文逻辑、中英混合字体、OMML公式，输出≥6000字、≥15张图片的完整报告。
 ---
 
-# 中期考核报告自动生成技能
+# 中期考核报告自动生成技能（通用版）
 
-基于 python-docx 自动生成研究生中期考核报告（写入文件.docx），涵盖思想品德自述、已完成科研工作、下一步科研计划三个章节。
+基于 python-docx 自动生成研究生中期考核报告（写入文件.docx），涵盖思想品德自述、已完成科研工作、下一步科研计划三个章节。**适用于任意研究方向**，通过动态分析 PPT 和论文自动识别研究模块。
 
 ---
 
@@ -14,57 +14,97 @@ description: 研究生中期考核报告自动生成技能。基于论文PDF、�
 | 文件 | 用途 | 能否省略 |
 |------|------|---------|
 | `研究生成绩单.pdf` | 课程成绩、学分、绩点 | **不可省略** |
-| `论文.pdf` | 技术内容来源 | **不可省略** |
+| 论文PDF | 技术内容来源 | **不可省略** |
 | `中期ppt.pdf` | 工作框架来源 | **不可省略** |
 | `图片/` 目录 | 用户提供的图片（可选） | 可省略（从论文/PPT提取） |
 
 **不需要的文件：**
 - ~~模板.docx~~ — 格式规范已内置
 - ~~中期考核相关资料.docx~~ — 考核要求已内置
-- ~~写入文件(3).docx~~ — 图片验证不再依赖参考文档
+- ~~参考文档~~ — 图片验证通过视觉模型完成
 
 ---
 
-## 实际工作状态
+## 核心设计：动态模块检测
 
-用户的工作模式：
+本技能的核心能力是**从 PPT 和论文中自动识别研究模块结构**，而非依赖预设模板。
 
-1. **论文和PPT是核心参考**：用户会提供论文PDF和中期PPT，这些是写作内容的主要来源。需要从中提取技术细节、实验数据、方法描述等。
-2. **图片来源**：优先从PPT中提取**嵌入式图片**，其次从论文中提取图表。用户也可直接提供 `图片/` 目录。PPT整页渲染仅用于理解页面结构，嵌入式图片才是实际使用的图表。
-3. **必须理解图片的真实含义**：不能仅凭文件名或位置猜测图片用途。必须通过阅读PPT页面文字、论文上下文来确认每张图片**实际表达的内容**，并与图注严格对应。必须交叉验证，确保正确无误。
+### 模块检测流程
+
+```
+阶段1: PPT页面分析
+  ├─ 提取每页标题文字
+  ├─ 识别页面类型（封面/目录/内容/总结/致谢）
+  ├─ 检测层级结构（大标题 → 子标题 → 内容）
+  └─ 输出：页面分类表
+
+阶段2: 模块边界识别
+  ├─ 大标题页面 = 模块分界点
+  ├─ 目录页面 = 模块清单
+  ├─ 连续内容页 = 同一模块
+  └─ 输出：模块列表（标题 + 页码范围 + 图片）
+
+阶段3: 内容提取
+  ├─ 每个模块提取：方法描述、公式、图片、实验数据
+  ├─ 从论文中补充：技术细节、引用、对比实验
+  └─ 输出：模块内容摘要
+
+阶段4: 图片映射
+  ├─ PPT嵌入式图片 → 按模块分组
+  ├─ 论文图表 → 按章节分组
+  ├─ 交叉验证：视觉模型 + PPT文字 + 论文描述
+  └─ 输出：图片映射表（文件名 → 模块 → 图注）
+```
+
+### PPT 页面分类规则
+
+| 页面特征 | 分类 | 处理方式 |
+|----------|------|---------|
+| 首页/含"中期"/"汇报" | 封面 | 提取标题、作者、日期 |
+| 含"目录"/"Contents"/编号列表 | 目录 | 提取模块清单 |
+| 含"参考文献"/"References" | 参考文献 | 跳过 |
+| 含"致谢"/"Thanks" | 致谢 | 跳过 |
+| 大标题 + 内容 | 内容页 | 归入当前模块 |
+| 仅大标题（无子内容） | 模块分界 | 开启新模块 |
+
+### 模块数量自适应
+
+- **最少模块数**：3（基础研究：方法 + 实验 + 结论）
+- **典型模块数**：4-6（常规研究）
+- **最多模块数**：8（复杂研究）
+- 如果检测到超过8个模块，合并相近的小模块
 
 ---
 
 ## 模板选择
 
-用户可选择两种行文与排版模板，生成报告前必须确认使用哪一种。模板内容已内置在 `templates/` 目录中，无需外部模板文件。
+用户可选择两种行文与排版模板，生成报告前必须确认使用哪一种。模板内容已内置在 `templates/` 目录中。
 
 ### lyw-模板（工程实现型）
-- **文件**：`templates/lyw-模板.md`（内置）
-- **特点**：三层行文逻辑（总述→概述→详述）、课程成绩逐门列出、偏工程实现和实验验证、统计分析丰富（ANOVA、Tukey HSD）
-- **适用**：工程类专业学位、偏实验验证的研究、图片数量多（15-20张）
+- **特点**：三层行文逻辑（总述→概述→详述）、课程成绩逐门列出、偏工程实现和实验验证、统计分析丰富
+- **适用**：工程类专业学位、偏实验验证的研究、图片数量多（≥15张）
 - **思想品德**：详细（~600字，列出每门课程和分数）
 - **科研工作**：三层逻辑展开，模块用（1）（2）编号
 - **下一步计划**：日期范围+详细描述
 
 ### yl-模板（理论推导型）
-- **文件**：`templates/yl-模板.md`（内置）
 - **特点**：直接进入详细展开、大量数学公式和推导、每个模块独立实验验证、对比表格丰富
-- **适用**：学术学位、偏理论和算法的研究、公式密集（25+个）
+- **适用**：学术学位、偏理论和算法的研究、公式密集（≥20个）
 - **思想品德**：简洁（~200字，不列具体课程）
 - **科研工作**：直接展开，模块用1. 2. 编号，内部用1.1, 1.2小节
 - **下一步计划**：编号列表+简短目标（无日期）
 
-### 选择方式
-在阶段1中询问用户选择哪种模板，然后严格按照对应模板的行文逻辑组织内容。
+### 选择依据
 
-**选择依据建议：**
-1. **研究类型判断**：
-   - **yl-模板**：适用于理论推导、算法创新、公式密集（≥20个）、数学模型构建为主的研究。如控制理论、算法设计、理论分析等。
-   - **lyw-模板**：适用于工程实现、系统开发、实验验证为主、图片/数据图表丰富（≥15张）的研究。如系统设计、原型开发、实验对比等。
-2. **用户确认**：向用户说明两种模板的特点，询问其研究更偏向理论创新还是工程实现，并确认模板选择。
-3. **默认策略**：若用户无法明确判断，可先询问研究的核心贡献是理论突破还是系统实现，再推荐相应模板。
-4. **材料分析辅助**：自动分析用户提供的材料（如PPT、论文）中的公式数量、图片数量、实验类型等，为模板选择提供数据支持。例如，若材料中公式≥20个且图片≤15张，可推荐yl-模板；若图片≥15张且包含大量实验数据图表，可推荐lyw-模板。
+向用户说明两种模板的特点，询问其研究更偏向理论创新还是工程实现。
+
+**快速判断：**
+- 核心贡献是"做了一个系统/平台/原型" → lyw-模板
+- 核心贡献是"提出了一个算法/方法/模型" → yl-模板
+
+**材料分析辅助：**
+- PPT中图片多（≥15张）且包含大量实验数据图表 → lyw-模板
+- PPT中公式多（≥20个）且以推导为主 → yl-模板
 
 ---
 
@@ -78,12 +118,19 @@ description: 研究生中期考核报告自动生成技能。基于论文PDF、�
    - `研究生成绩单.pdf` — 课程成绩、学分、绩点（**必需**）
    - 论文PDF — 技术内容来源（**必需**）
    - `中期ppt.pdf` — 完整工作框架（**必需**）
-   - `图片/` 目录 — 用户提供的图片（可选，如无则从论文/PPT提取）
-2. **确认信息来源**：向用户确认各材料的用途和对应关系
+   - `图片/` 目录 — 用户提供的图片（可选）
+
+2. **读取成绩单**：提取总学分、绩点、核心课程及分数
+
+3. **分析PPT结构**：
+   - 提取每页文字内容（前200字）
+   - 识别页面类型（封面/目录/内容/总结）
+   - 检测模块边界（大标题页面）
+   - 输出模块清单
+
+4. **确认信息来源**：向用户确认检测到的模块结构是否正确
 
 ### 中期考核要求（内置）
-
-以下为研究生中期考核的通用要求，无需外部文件：
 
 **考核内容：**
 1. 思想品德与业务学习情况自述
@@ -114,8 +161,6 @@ description: 研究生中期考核报告自动生成技能。基于论文PDF、�
 **这是最容易出错的阶段。必须严格遵循以下流程。**
 
 #### 2.1 从PPT中提取嵌入式图片
-
-**重要：PPT中需要提取的是嵌入式图片，不仅仅是整页渲染。**
 
 ```python
 import fitz
@@ -199,18 +244,6 @@ doc.close()
    - 对应的报告图注（图1、图2...）
    - 验证状态（已验证/待确认）
 
-**注意：不再依赖参考文档进行图片验证。所有验证通过视觉模型+PPT文字+论文描述完成。**
-
-**交叉验证示例：**
-
-```
-图片文件：ppt_images/page6_img0.png
-视觉模型描述：折线图，横轴为epoch，纵轴为VAF，显示3条曲线趋于收敛
-PPT第6页文字：协同重构精度验证，VAF在r=3条件下达到90%以上
-论文第4.2节：Figure 5 shows the VAF convergence...
-验证结论：此图为VAF收敛曲线，对应报告图4"VAF与协同数的关系" ✓
-```
-
 **常见错误（必须避免）：**
 - 仅凭文件名猜测图片内容（文件名可能完全错误）
 - 同一图片被错误地用于多个图注
@@ -224,23 +257,23 @@ PPT第6页文字：协同重构精度验证，VAF在r=3条件下达到90%以上
 | 章节 | 内容 | 篇幅占比 |
 |------|------|---------|
 | 一、思想品德与业务学习情况自述 | 思想政治、课程成绩、学习态度、身体素质 | ~20% |
-| 二、已完成的科研工作 | PPT整体框架 + 6个技术模块详细描述 | ~60% |
+| 二、已完成的科研工作 | 整体框架 + N个技术模块详细描述 | ~60% |
 | 三、下一步科研计划 | 分阶段科研安排 | ~20% |
 
-#### 第二章三层行文逻辑（必须遵循）
+#### 第二章三层行文逻辑（lyw-模板，必须遵循）
 
 **第一层：开篇总述**
-- 研究目的（1-2句）
-- 整体框架描述（配框架图）
-- "目前的已完成工作主要包括以下六个方面："
+- 研究目的（1-2句，从PPT首页/摘要提取）
+- 整体框架描述（配框架图，从PPT中提取）
+- "目前的已完成工作主要包括以下N个方面："
 
-**第二层：六部分简要概述**
+**第二层：N部分简要概述**
 - 每个模块用1-2句话概括核心内容
 - 不展开细节，仅提供全局视角
-- 示例：
+- 编号：（1）（2）（3）...
+- 示例（通用格式）：
   ```
-  （1）多模态数据采集与预处理，搭建多模态数据采集平台，采集sEMG和关节运动学数据，
-  并进行信号滤波、包络提取和标准化等预处理操作，为后续协同建模提供高质量数据基础。
+  （N）[模块名称]，[做了什么]，[怎么做的]，[达到什么效果/为后续提供什么]。
   ```
 
 **第三层：详细展开**
@@ -251,16 +284,13 @@ PPT第6页文字：协同重构精度验证，VAF在r=3条件下达到90%以上
   - 实验验证（数据、统计分析）
   - 创新点说明
 
-**6个技术模块（按PPT顺序）：**
+#### 第二章行文逻辑（yl-模板，直接展开）
 
-| 模块 | 内容 | 典型图片数 |
-|------|------|-----------|
-| （1）多模态数据采集与预处理 | 采集平台、肌肉定义、预处理流程、VAF分析 | 2-3张 |
-| （2）跨模态泛化协同建模 | NMF特征提取、ResMamba网络、知识蒸馏、迁移学习、实验验证 | 6-8张 |
-| （3）实时协同缺损评估与前馈解码 | AAN机制、协同缺损定义、滑动窗口评估 | 1-2张 |
-| （4）基于MFAC的融合闭环控制律 | PFDM数据驱动、前馈补偿、融合控制律、稳定性分析 | 1-2张 |
-| （5）实验平台搭建 | 三个子系统、时序同步、技术参数 | 1-2张 |
-| （6）学术成果 | 论文、软著、专利、比赛 | 1张 |
+- 无开篇总述和简要概述
+- 直接"已完成工作："后进入各模块
+- 模块用 1. 2. 编号
+- 内部用 1.1, 1.2 小节
+- 大量数学公式和推导
 
 ### 阶段4：脚本生成
 
@@ -274,24 +304,8 @@ BASE_DIR = r'工作目录路径'
 IMG_DIR = os.path.join(BASE_DIR, '图片')  # 用户提供的图片（可选）
 
 def img(name):
-    """图片路径（优先从图片/目录，其次从PPT/论文提取目录）"""
-    # 首先检查用户提供的图片目录
-    user_img_path = os.path.join(IMG_DIR, name)
-    if os.path.exists(user_img_path):
-        return user_img_path
-
-    # 其次检查PPT提取的图片目录
-    ppt_img_path = os.path.join(BASE_DIR, 'ppt_images', name)
-    if os.path.exists(ppt_img_path):
-        return ppt_img_path
-
-    # 最后检查论文提取的图片目录
-    paper_img_path = os.path.join(BASE_DIR, 'paper_images', name)
-    if os.path.exists(paper_img_path):
-        return paper_img_path
-
-    # 如果都找不到，返回用户目录路径（会让调用者知道图片缺失）
-    return user_img_path
+    """图片路径查找（优先级：图片/ → ppt_images/ → paper_images/）"""
+    # 详见 rewrite_report_template.py
 ```
 
 **模板格式规范：**
@@ -303,13 +317,6 @@ def img(name):
 | 图注 | Times New Roman | 10pt | firstLine=400 | 居中 |
 
 所有段落行距：`line=360, lineRule=auto, after=0`
-
-**OMML公式（pandoc LaTeX → OMML）：**
-```python
-from omml_formulas import create_formula_paragraph
-create_formula_paragraph(cell, 'loss')
-create_formula_paragraph(cell, 'pfdm')
-```
 
 ### 阶段5：执行与验证
 
@@ -349,7 +356,7 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 | 元素 | 中文字体 | 英文字体 | 字号 |
 |------|---------|---------|------|
 | 正文 | 宋体 | Times New Roman | 12pt（小四） |
-| 标题 | 黑体 | — | — |
+| 标题 | 仿宋_GB2312 | — | 15pt |
 | 图注 | 宋体 | Times New Roman | 10pt（五号） |
 
 ### 编号
@@ -360,7 +367,7 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 - 居中放置
 - 图注在图片下方
 - 宽度建议 4.5-5.5 英寸
-- 图注段落样式：a3（与模板一致）
+- 图注段落样式：a3
 
 ---
 
@@ -372,15 +379,73 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 - 逻辑清晰，层次分明
 
 ### 技术深度
-- 包含关键公式（损失函数、控制律等）
+- 包含关键公式（损失函数、控制律、目标函数等）
 - 描述核心方法思路和创新点
 - 不展开详细推导过程
 - 适度引用实验数据和统计结果
 
 ### 篇幅控制
-- 思想品德章节：6-8段
+- 思想品德章节：6-8段（lyw）或 1段（yl）
 - 科研工作章节：每个模块2-4段
 - 下一步计划：分3个时间段，每段1段描述
+
+---
+
+## 通用写作模式
+
+### 模块展开模式（每个技术模块通用）
+
+```
+1. 背景与目的（为什么要做）
+   "针对[问题]，本研究提出了[方法名称]..."
+
+2. 方法描述（怎么做）
+   "具体而言，[方法步骤1]，[方法步骤2]..."
+   [配公式]
+
+3. 图片展示（配图说明）
+   "如图X所示为[内容描述]。"
+   [配图片]
+
+4. 实验验证（数据支撑）
+   "实验结果表明，[结论]。如图X所示..."
+   [配数据图/表格]
+
+5. 创新点/结论
+   "该方法的创新点在于[创新点描述]。"
+```
+
+### 问题导向模式
+```
+针对[问题]，设计[方法]，实现[目标]
+```
+
+### 流程式描述
+```
+首先[步骤1]，然后[步骤2]，最后[步骤3]
+```
+
+### 目的驱动模式
+```
+为了[目的]，[做了什么]
+```
+
+### 数据支撑模式
+```
+[方法]在[条件]下达到[数值]，较[基线]提升[百分比]
+```
+
+### 公式引入模式
+```
+[描述]定义为：
+[公式]
+其中[变量说明]。
+```
+
+### 图片引入模式
+```
+如图X所示为[内容描述]
+```
 
 ---
 
@@ -393,7 +458,7 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 **解决：** 必须通过阶段2的交叉验证流程确认图片真实含义，不能仅凭文件名判断
 
 ### Q3: 字数不足6000
-**解决：** 补充技术细节：数据预处理流程、NMF/VAF方法论、实验统计分析、控制律稳定性分析、实验平台技术参数
+**解决：** 补充技术细节：数据预处理流程、方法论描述、实验统计分析、稳定性分析、实验平台技术参数
 
 ### Q4: 中英混合字体设置不生效
 **解决：** 使用 set_run_font 函数，确保 eastAsia、ascii、hAnsi 三个属性都设置
@@ -406,6 +471,9 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 
 ### Q7: 段落行间距与模板不一致
 **解决：** 在 add_para 和 add_caption 中显式设置 `line=360, lineRule=auto, after=0`
+
+### Q8: PPT模块检测不准确
+**解决：** 手动向用户确认模块结构，根据反馈调整模块划分
 
 ---
 
@@ -436,13 +504,11 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 4. **不可靠**：仅凭文件名判断图片内容
 5. **不可靠**：PPT整页渲染图（可能包含多个元素，不能直接用于报告）
 
-**注意：不再依赖参考文档进行图片验证。所有验证通过视觉模型+PPT文字+论文描述完成。**
-
 ### 行文逻辑三层结构
 
 模板的写作逻辑是"总述→概述→详述"三层结构：
 1. **总述**：研究目的 + 整体框架 + 框架图
-2. **概述**：6个模块各1-2句话概括
+2. **概述**：N个模块各1-2句话概括
 3. **详述**："已完成工作：" + 每个模块详细展开
 
 缺少任何一层都会导致行文逻辑不完整。
@@ -455,7 +521,7 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 
 ---
 
-**技能版本：** 3.1.0
+**技能版本：** 4.0.0
 **兼容平台：** Claude Code (CLI/Desktop/Web)
 **Python版本：** >= 3.7
 **依赖：** python-docx, PyMuPDF (fitz), Pillow, lxml
@@ -464,15 +530,17 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 <!-- SLOW_UPDATE_START -->
 When generating the midterm report, always follow these priorities:
 
-1. **Chapter 3 Research Plan — Prevent Regression**: The '下一步科研计划' chapter requires as much care as Chapter 2. Structure it as 3 distinct time phases (e.g., 2024.09-2025.03, 2025.03-2025.09, 2025.09-2026.06). Each phase must: (a) specify a clear date range, (b) describe 2-3 concrete research tasks with technical detail, (c) explicitly connect to the completed work from Chapter 2. For lyw-模板, use detailed descriptions with date ranges per phase; for yl-模板, use numbered sub-items with concise goals. The research plan must logically follow from and build upon what was already completed — do not introduce unrelated directions. Ensure the plan spans the remaining degree period and includes thesis writing milestones. Aim for ~20% of total report length (at least 1200 words).
+1. **Dynamic Module Detection — Core Capability**: The skill must detect research modules from PPT structure, not use hardcoded modules. Extract page titles, identify module boundaries (new major topic = new module), and build the chapter structure dynamically. If detection fails, ask the user to confirm the module list before proceeding.
 
-2. **Image Cross-Validation is Non-Negotiable**: Never skip cross-validation for any image. Before inserting, verify meaning via visual inspection + PPT text + paper descriptions. Use the mapping table to track source, content, caption assignment, and verification status. If the visual model cannot clearly identify the image content (e.g., too small, ambiguous, or no readable text), mark it as '待确认' and seek user input before inserting — do not guess. Even if the report passes word-count checks, mismatched images will fail quality evaluation.
+2. **Chapter 3 Research Plan — Prevent Regression**: The '下一步科研计划' chapter requires as much care as Chapter 2. Structure it as 3 distinct time phases. Each phase must: (a) specify a clear date range, (b) describe 2-3 concrete research tasks with technical detail, (c) explicitly connect to the completed work from Chapter 2. Aim for ~20% of total report length (at least 1200 words).
 
-3. **Three-Layer Logic for Chapter 2**: Always include: (1) opening overview with framework figure, (2) brief summary of all 6 modules (1-2 sentences each), (3) detailed expansion after '已完成工作:' transition marker. Missing any layer causes structural failures.
+3. **Image Cross-Validation is Non-Negotiable**: Never skip cross-validation for any image. Before inserting, verify meaning via visual inspection + PPT text + paper descriptions. Use the mapping table to track source, content, caption assignment, and verification status. If the visual model cannot clearly identify the image content, mark it as '待确认' and seek user input before inserting — do not guess.
 
-4. **Template Selection**: Analyze formula count and image count in provided materials to recommend lyw- (≥15 images, experimental) vs yl- (≥20 formulas, theoretical). Default to lyw- if uncertain.
+4. **Three-Layer Logic for Chapter 2 (lyw-模板)**: Always include: (1) opening overview with framework figure, (2) brief summary of all N modules (1-2 sentences each), (3) detailed expansion after '已完成工作:' transition marker. Missing any layer causes structural failures.
 
-5. **Caption and Format Consistency**: After generating, visually verify every image caption in the final document. Check for duplicate images, mismatched descriptions, and non-sequential figure numbering. Ensure all paragraphs use line=360, lineRule=auto, after=0. For yl-模板, verify all OMML formulas render correctly and are centered in their cells.
+5. **Template Selection**: Analyze formula count and image count in provided materials to recommend lyw- (≥15 images, experimental) vs yl- (≥20 formulas, theoretical). Default to lyw- if uncertain.
 
-6. **Execution**: Use E:/Anaconda/python.exe with full path. Write all Python code to files before execution. Verify output has ≥6000 words and ≥15 images.
+6. **Caption and Format Consistency**: After generating, visually verify every image caption in the final document. Check for duplicate images, mismatched descriptions, and non-sequential figure numbering. Ensure all paragraphs use line=360, lineRule=auto, after=0.
+
+7. **Execution**: Use E:/Anaconda/python.exe with full path. Write all Python code to files before execution. Verify output has ≥6000 words and ≥15 images.
 <!-- SLOW_UPDATE_END -->
