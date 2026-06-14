@@ -1,0 +1,27 @@
+# 个人数据文件（含真实姓名、成绩、论文）
+研究生成绩单.pdf
+中期考核相关资料.docx
+中期ppt.pdf
+写入文件.docx
+余龙-模板.pdf
+李耀威-模板.docx
+*.docx
+*.pdf
+
+# 图片目录（用户个人研究图片）
+图片/
+ppt_images/
+paper_images/
+ppt_images_new/
+
+# Python缓存
+__pycache__/
+*.pyc
+
+# 临时LaTeX文件
+*.aux
+*.log
+*.tex
+
+# 备份
+*.bak
