@@ -1,5 +1,5 @@
 """
-中期考核报告生成脚本模板 v3.0
+中期考核报告生成脚本模板 v3.1
 根据实际工作目录和材料进行修改
 
 使用方法：
@@ -14,28 +14,67 @@
 - 不要信任图片文件名，必须用视觉模型核验图片实际内容
 - 公式使用 pandoc LaTeX → OMML 转换，确保渲染正确（需要安装 pandoc）
 - 不再需要写入文件(3).docx、模板.docx、中期考核相关资料.docx
+
+环境要求：
+- Python >= 3.7
+- 依赖：python-docx, PyMuPDF (fitz), Pillow, lxml
 """
+
+from __future__ import annotations
 
 import os
 import shutil
+import sys
+from typing import Optional
+
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from lxml import etree
+from lxml.etree import _Element
 
 # ============================================================
 # 配置区域 - 根据实际情况修改
 # ============================================================
-BASE_DIR = r'工作目录路径'
-WRITE_FILE = os.path.join(BASE_DIR, '写入文件.docx')
-IMG_DIR = os.path.join(BASE_DIR, '图片')  # 用户提供的图片（可选）
+BASE_DIR: str = r'工作目录路径'
+WRITE_FILE: str = os.path.join(BASE_DIR, '写入文件.docx')
+IMG_DIR: str = os.path.join(BASE_DIR, '图片')  # 用户提供的图片（可选）
 
 
 # ============================================================
 # 工具函数
 # ============================================================
-def set_run_font(run, font_name='Times New Roman', font_size=Pt(12), bold=None, east_asia='宋体'):
+def _apply_spacing(pPr: _Element, line: str = '360', after: str = '0') -> None:
+    """统一设置段落行距和段后间距"""
+    spacing = pPr.find(qn('w:spacing'))
+    if spacing is None:
+        spacing = etree.SubElement(pPr, qn('w:spacing'))
+    spacing.set(qn('w:line'), line)
+    spacing.set(qn('w:lineRule'), 'auto')
+    spacing.set(qn('w:after'), after)
+
+
+def _apply_indent(pPr: _Element, first_indent: Optional[str] = None, left_indent: Optional[str] = None) -> None:
+    """统一设置段落缩进"""
+    if first_indent is None and left_indent is None:
+        return
+    ind = pPr.find(qn('w:ind'))
+    if ind is None:
+        ind = etree.SubElement(pPr, qn('w:ind'))
+    if first_indent is not None:
+        ind.set(qn('w:firstLine'), first_indent)
+    if left_indent is not None:
+        ind.set(qn('w:left'), left_indent)
+
+
+def set_run_font(
+    run,
+    font_name: str = 'Times New Roman',
+    font_size: Pt = Pt(12),
+    bold: Optional[bool] = None,
+    east_asia: Optional[str] = '宋体',
+) -> None:
     """设置混合字体：中文宋体 + 英文 Times New Roman"""
     run.font.name = font_name
     run.font.size = font_size
@@ -56,7 +95,7 @@ def set_run_font(run, font_name='Times New Roman', font_size=Pt(12), bold=None, 
     rFonts.set(qn('w:hAnsi'), font_name)
 
 
-def clear_cell(cell):
+def clear_cell(cell) -> None:
     """清空表格单元格内容"""
     for i in range(len(cell.paragraphs) - 1, 0, -1):
         p = cell.paragraphs[i]
@@ -68,8 +107,17 @@ def clear_cell(cell):
         first_p._element.remove(r)
 
 
-def add_para(cell, text, font_name='Times New Roman', font_size=Pt(12), bold=None,
-             alignment=None, first_indent='480', left_indent='34', east_asia='宋体'):
+def add_para(
+    cell,
+    text: str,
+    font_name: str = 'Times New Roman',
+    font_size: Pt = Pt(12),
+    bold: Optional[bool] = None,
+    alignment=None,
+    first_indent: Optional[str] = '480',
+    left_indent: Optional[str] = '34',
+    east_asia: Optional[str] = '宋体',
+):
     """向单元格添加段落，自动设置1.5倍行距和首行缩进"""
     first_p = cell.paragraphs[0]
     if len(cell.paragraphs) == 1 and not first_p.text.strip() and len(first_p._element.findall(qn('w:r'))) == 0:
@@ -81,27 +129,22 @@ def add_para(cell, text, font_name='Times New Roman', font_size=Pt(12), bold=Non
     run = p.add_run(text)
     set_run_font(run, font_name, font_size, bold, east_asia=east_asia)
     pPr = p._element.get_or_add_pPr()
-    # 行距：1.5倍（line=360 twips），段后间距0
-    spacing = pPr.find(qn('w:spacing'))
-    if spacing is None:
-        spacing = etree.SubElement(pPr, qn('w:spacing'))
-    spacing.set(qn('w:line'), '360')
-    spacing.set(qn('w:lineRule'), 'auto')
-    spacing.set(qn('w:after'), '0')
-    # 缩进：首行缩进和左缩进
-    if first_indent is not None or left_indent is not None:
-        ind = pPr.find(qn('w:ind'))
-        if ind is None:
-            ind = etree.SubElement(pPr, qn('w:ind'))
-        if first_indent is not None:
-            ind.set(qn('w:firstLine'), first_indent)
-        if left_indent is not None:
-            ind.set(qn('w:left'), left_indent)
+    _apply_spacing(pPr)
+    _apply_indent(pPr, first_indent, left_indent)
     return p
 
 
-def add_img(cell, img_path, width=Inches(5.0)):
-    """向单元格添加图片（居中）"""
+def add_img(cell, img_path: str, width=Inches(5.0)):
+    """向单元格添加图片（居中）
+
+    Raises:
+        FileNotFoundError: 图片文件不存在时抛出
+    """
+    if not os.path.exists(img_path):
+        raise FileNotFoundError(
+            f'图片文件不存在: {img_path}\n'
+            f'请检查图片路径是否正确，或确认图片已从PPT/论文中提取。'
+        )
     p = cell.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
@@ -109,7 +152,7 @@ def add_img(cell, img_path, width=Inches(5.0)):
     return p
 
 
-def add_caption(cell, text, font_size=Pt(10)):
+def add_caption(cell, text: str, font_size: Pt = Pt(10)):
     """添加图片图注（居中，带a3样式，首行缩进400，1.5倍行距）"""
     p = cell.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -121,46 +164,56 @@ def add_caption(cell, text, font_size=Pt(10)):
     if pStyle is None:
         pStyle = etree.SubElement(pPr, qn('w:pStyle'))
     pStyle.set(qn('w:val'), 'a3')
-    # 行距：1.5倍
-    spacing = pPr.find(qn('w:spacing'))
-    if spacing is None:
-        spacing = etree.SubElement(pPr, qn('w:spacing'))
-    spacing.set(qn('w:line'), '360')
-    spacing.set(qn('w:lineRule'), 'auto')
-    # 首行缩进：400 twips（与模板图注一致）
-    ind = pPr.find(qn('w:ind'))
-    if ind is None:
-        ind = etree.SubElement(pPr, qn('w:ind'))
-    ind.set(qn('w:firstLine'), '400')
+    _apply_spacing(pPr)
+    _apply_indent(pPr, first_indent='400')
     return p
 
 
-def img(name):
-    """图片路径（优先从图片/目录，其次从PPT/论文提取目录）"""
-    # 首先检查用户提供的图片目录
-    user_img_path = os.path.join(IMG_DIR, name)
-    if os.path.exists(user_img_path):
-        return user_img_path
+def img(name: str) -> Optional[str]:
+    """图片路径查找（优先级：图片/ → ppt_images/ → paper_images/）
 
-    # 其次检查PPT提取的图片目录
-    ppt_img_path = os.path.join(BASE_DIR, 'ppt_images', name)
-    if os.path.exists(ppt_img_path):
-        return ppt_img_path
+    Returns:
+        图片文件的完整路径，如果未找到则返回 None
 
-    # 最后检查论文提取的图片目录
-    paper_img_path = os.path.join(BASE_DIR, 'paper_images', name)
-    if os.path.exists(paper_img_path):
-        return paper_img_path
+    Raises:
+        FileNotFoundError: 所有路径都找不到图片时抛出，附带详细诊断信息
+    """
+    search_paths: list[tuple[str, str]] = [
+        (IMG_DIR, '用户提供的图片目录'),
+        (os.path.join(BASE_DIR, 'ppt_images'), 'PPT提取的图片'),
+        (os.path.join(BASE_DIR, 'paper_images'), '论文提取的图片'),
+    ]
 
-    # 如果都找不到，返回用户目录路径（会让调用者知道图片缺失）
-    return user_img_path
+    for directory, desc in search_paths:
+        candidate = os.path.join(directory, name)
+        if os.path.exists(candidate):
+            return candidate
+
+    # 构建诊断信息
+    checked = '\n'.join(f'  - {desc}: {os.path.join(d, name)}' for d, desc in search_paths)
+    raise FileNotFoundError(
+        f'图片 "{name}" 在以下路径中均未找到:\n{checked}\n\n'
+        f'请确认:\n'
+        f'  1. 图片已从PPT/论文中提取（运行阶段2的提取脚本）\n'
+        f'  2. 图片文件名正确（不要信任文件名，用视觉模型核验）\n'
+        f'  3. 如使用用户图片目录，确认 图片/ 目录存在且包含该文件'
+    )
 
 
 # ============================================================
 # 章节写入函数 - 根据实际内容修改
 # ============================================================
-def write_section1(cell):
-    """一、思想品德与业务学习情况自述"""
+def write_section1(cell) -> None:
+    """一、思想品德与业务学习情况自述
+
+    内容要点（根据研究生成绩单填写）：
+    - 思想政治：政治态度、理论学习、制度遵守
+    - 课程成绩：总学分、绩点、核心课程及分数
+    - 学习态度：勤奋努力、积极向上
+    - 科研能力：参与项目、技能掌握
+    - 学术道德：规范遵守、课程支撑
+    - 身体素质：锻炼习惯、身心健康
+    """
     clear_cell(cell)
 
     add_para(cell, '思想政治方面内容...')
@@ -171,14 +224,20 @@ def write_section1(cell):
     add_para(cell, '身体素质方面内容...')
 
 
-def write_section2(cell):
-    """
-    二、已完成的科研工作
+def write_section2(cell) -> None:
+    """二、已完成的科研工作
 
-    三层行文逻辑：
+    三层行文逻辑（必须遵循）：
     1. 开篇总述：研究目的 + 整体框架 + 框架图
     2. 六部分简要概述：每个模块1-2句话概括
     3. 详细展开："已完成工作：" + 每个模块详细描述
+
+    每个模块展开结构：
+    - 背景与目的（为什么要做）
+    - 方法描述（怎么做）
+    - 图片展示（配图说明）
+    - 实验验证（数据支撑）
+    - 创新点/结论
     """
     clear_cell(cell)
 
@@ -253,8 +312,15 @@ def write_section2(cell):
         '形成了具有自主知识产权的上肢康复FES控制系统。')
 
 
-def write_section3(cell):
-    """三、下一步科研计划"""
+def write_section3(cell) -> None:
+    """三、下一步科研计划
+
+    要求：
+    - 分3个时间段，每段包含明确的日期范围
+    - 每段描述2-3个具体研究任务
+    - 与第二章已完成工作逻辑衔接
+    - 包含论文撰写里程碑
+    """
     clear_cell(cell)
 
     add_para(cell, '根据目前的研究进展和课题计划，下一步的科研工作主要包括以下三个阶段：')
@@ -266,22 +332,35 @@ def write_section3(cell):
 # ============================================================
 # 主函数
 # ============================================================
-def main():
+def main() -> None:
+    # 检查工作目录
+    if not os.path.isdir(BASE_DIR):
+        print(f'错误：工作目录不存在: {BASE_DIR}')
+        print('请修改脚本中的 BASE_DIR 为实际工作目录路径。')
+        sys.exit(1)
+
     # 从模板恢复（模板文件已内置，使用工作目录中的模板或创建新文档）
     template_path = os.path.join(BASE_DIR, '模板.docx')
     if os.path.exists(template_path):
         shutil.copy2(template_path, WRITE_FILE)
-        print('Restored from template')
+        print(f'从模板恢复: {template_path}')
     else:
-        # 如果没有模板文件，创建新文档
         doc = Document()
         doc.save(WRITE_FILE)
-        print('Created new document (no template found)')
+        print(f'未找到模板文件，已创建新文档: {WRITE_FILE}')
 
     doc = Document(WRITE_FILE)
-    assert len(doc.tables) >= 1
+
+    if len(doc.tables) < 1:
+        print(f'错误：文档中没有表格。请确认模板文件包含正确的表格结构。')
+        print(f'当前文档: {WRITE_FILE}')
+        sys.exit(1)
+
     table = doc.tables[0]
-    assert len(table.rows) >= 6
+    if len(table.rows) < 6:
+        print(f'错误：表格行数不足（需要至少6行，当前{len(table.rows)}行）。')
+        print(f'请确认模板文件的表格结构正确。')
+        sys.exit(1)
 
     print('Writing Section 1...')
     write_section1(table.rows[1].cells[0])

@@ -455,10 +455,11 @@ E:/Anaconda/python.exe "D:/工作目录/rewrite_report.py"
 
 ---
 
-**技能版本：** 3.0.0
+**技能版本：** 3.1.0
 **兼容平台：** Claude Code (CLI/Desktop/Web)
+**Python版本：** >= 3.7
 **依赖：** python-docx, PyMuPDF (fitz), Pillow, lxml
-**Python环境：** Anaconda
+**Python环境：** Anaconda（推荐）
 
 <!-- SLOW_UPDATE_START -->
 When generating the midterm report, always follow these priorities:

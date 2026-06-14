@@ -125,11 +125,27 @@ D:\我的中期汇报\
 
 ## 依赖环境
 
+- **Python >= 3.7**（推荐 Anaconda）
+- **依赖包：**
+
 ```bash
 pip install python-docx PyMuPDF Pillow lxml
 ```
 
-Python 环境：Anaconda（推荐）
+## 图片验证
+
+生成报告前，可先验证图片是否满足要求：
+
+```bash
+E:/Anaconda/python.exe verify_images.py D:\你的工作目录
+```
+
+检查内容：
+- 图片数量 >= 15
+- 图片格式有效（PNG/JPG/TIFF/BMP）
+- 图片宽度 >= 400px
+- 图片编号连续无跳号
+- 文件大小 >= 5KB（排除损坏文件）
 
 ## 常见问题
 
