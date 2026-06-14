@@ -1,10 +1,10 @@
 """
-中期考核报告生成脚本模板 v2.2
+中期考核报告生成脚本模板 v3.0
 根据实际工作目录和材料进行修改
 
 使用方法：
 1. 修改 BASE_DIR 为实际工作目录
-2. 图片/ 目录中包含所有待插入报告的图片
+2. 图片来源：优先从PPT/论文提取，也可使用图片/目录
 3. 追溯每张图片来源（PPT/论文），确认内容与图注对应
 4. 修改各章节内容（write_section1/2/3函数）
 5. 运行: E:/Anaconda/python.exe rewrite_report.py
@@ -13,6 +13,7 @@
 - 不要使用 conda run -n base python -c "多行代码"（Windows不支持）
 - 不要信任图片文件名，必须用视觉模型核验图片实际内容
 - 公式使用 pandoc LaTeX → OMML 转换，确保渲染正确（需要安装 pandoc）
+- 不再需要写入文件(3).docx、模板.docx、中期考核相关资料.docx
 """
 
 import os
@@ -28,7 +29,7 @@ from lxml import etree
 # ============================================================
 BASE_DIR = r'工作目录路径'
 WRITE_FILE = os.path.join(BASE_DIR, '写入文件.docx')
-IMG_DIR = os.path.join(BASE_DIR, '图片')  # 所有待插入报告的图片
+IMG_DIR = os.path.join(BASE_DIR, '图片')  # 用户提供的图片（可选）
 
 
 # ============================================================
@@ -135,8 +136,24 @@ def add_caption(cell, text, font_size=Pt(10)):
 
 
 def img(name):
-    """图片路径（图片/目录）"""
-    return os.path.join(IMG_DIR, name)
+    """图片路径（优先从图片/目录，其次从PPT/论文提取目录）"""
+    # 首先检查用户提供的图片目录
+    user_img_path = os.path.join(IMG_DIR, name)
+    if os.path.exists(user_img_path):
+        return user_img_path
+
+    # 其次检查PPT提取的图片目录
+    ppt_img_path = os.path.join(BASE_DIR, 'ppt_images', name)
+    if os.path.exists(ppt_img_path):
+        return ppt_img_path
+
+    # 最后检查论文提取的图片目录
+    paper_img_path = os.path.join(BASE_DIR, 'paper_images', name)
+    if os.path.exists(paper_img_path):
+        return paper_img_path
+
+    # 如果都找不到，返回用户目录路径（会让调用者知道图片缺失）
+    return user_img_path
 
 
 # ============================================================
@@ -250,9 +267,16 @@ def write_section3(cell):
 # 主函数
 # ============================================================
 def main():
-    # 从模板恢复
-    shutil.copy2(os.path.join(BASE_DIR, '模板.docx'), WRITE_FILE)
-    print('Restored from template')
+    # 从模板恢复（模板文件已内置，使用工作目录中的模板或创建新文档）
+    template_path = os.path.join(BASE_DIR, '模板.docx')
+    if os.path.exists(template_path):
+        shutil.copy2(template_path, WRITE_FILE)
+        print('Restored from template')
+    else:
+        # 如果没有模板文件，创建新文档
+        doc = Document()
+        doc.save(WRITE_FILE)
+        print('Created new document (no template found)')
 
     doc = Document(WRITE_FILE)
     assert len(doc.tables) >= 1
